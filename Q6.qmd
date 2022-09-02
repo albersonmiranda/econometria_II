@@ -1,0 +1,369 @@
+---
+title: "Lista I: Q6"
+author: "Alberson Miranda"
+date: "`r Sys.Date()`"
+format: pdf
+number-sections: true
+mainfont: "Times New Roman"
+monofont: "Consolas"
+monofontoptions:
+  - Scale=0.8
+highlight-style: zenburn
+header-includes: 
+  - \renewcommand\thesubsection{\Alph{subsection}}
+---
+
+```{r configs, include = FALSE}
+knitr::opts_chunk$set(
+  fig.output = "70%"
+)
+```
+
+# Dado o processo $y_t=\phi_0+\phi_1y_{t-1}+a_t$:
+
+## Simule 1000 observações considerando $|\phi|<1$, $\sigma^2=5$ e $y_0=\frac{\phi_0}{1-\phi_1}$. Apresente o gráfico da série, a função de autocorrelação e a função de autocorrelação parcial.
+
+Primeiramente, o código para simular um processo AR(1):
+
+```{r funcao AR1}
+
+# reprodutibilidade
+set.seed(1)
+
+# função geradora de processo AR(1)
+ar1 = function(
+    # quantidade de t (incluindo horizonte de previsão)
+    t,
+    # constante
+    phi_0 = 0,
+    # coeficiente autoregressivo
+    phi_1,
+    # variância
+    v
+) {
+  
+  # y_t inicial
+  # se a série é estacionária E[y_t-1] = E[y_t])
+  y_t = phi_0 / (1 - phi_1)
+  
+  # gerando processo a partir de t_2 até t
+  for (i in 2:t) {
+    # ruído branco
+    erro = rnorm(1, mean = 0, sd = sqrt(v))
+    # AR1
+    y_t[i] = phi_0 + phi_1 * y_t[i - 1] + erro
+  }
+  
+  # retorna processo
+  return(y_t)
+}
+```
+
+Obtendo a série simulada:
+
+```{r a serie}
+# série AR(1)
+y_t = ar1(
+  t = 1000,
+  phi_1 = 0.5,
+  v = 5
+)
+```
+
+Os gráficos:
+
+```{r a graficos}
+# série
+plot(
+  y_t, type = "l",
+  xlab = "t, h",
+  ylab = "Y"
+)
+
+# funções de autocorrelação
+par(mfrow = c(1, 2))
+acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
+pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
+```
+
+## Repita a letra A, agora considerando $\sigma^2=100$.
+
+```{r b serie}
+# série AR(1)
+y_t = ar1(
+  t = 1000,
+  phi_1 = 0.5,
+  v = 100
+)
+
+head(y_t)
+```
+
+Os gráficos:
+
+```{r b graficos}
+# série
+plot(
+  y_t, type = "l",
+  xlab = "t, h",
+  ylab = "Y"
+)
+
+# funções de autocorrelação
+par(mfrow = c(1, 2))
+acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
+pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
+```
+
+Ambas séries continuam variando em torno da média, entretanto, como esperado, a amplitude da série de maior variância é maior. As autocorrelações da segunda série também estão maiores, o que não era esperado dado que $\rho_j=\phi^j$, ou seja, não depende da variância. Isso provavelmente ocorre porque a função `sample()` é aleatória e a média de $e_t$ é próxima de zero mas não exatamente. Por exemplo:
+
+```{r rnorm}
+erro = rnorm(1000, 0, 10)
+head(erro)
+
+# média do erro
+mean(erro)
+```
+
+## Repita a letra A, considerando agora $y_0=500$. O que você observa de diferente?
+
+```{r c serie}
+# série AR(1)
+y_t = ar1(
+  t = 1000,
+  phi_0 = 500,
+  phi_1 = 0.5,
+  v = 5
+)
+
+head(y_t)
+```
+
+Os gráficos:
+
+```{r c graficos}
+# série
+plot(
+  y_t, type = "l",
+  xlab = "t, h",
+  ylab = "Y"
+)
+
+# funções de autocorrelação
+par(mfrow = c(1, 2))
+acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
+pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
+```
+
+A diferença agora é que com a constante diferente de zero, a série flutua em torno de sua nova média:
+
+\begin{equation}
+  \begin{aligned}
+    E[Y_t]&=\frac{c}{1-\phi_1} \\
+    &=\frac{500}{1-0.5} \\
+    &=1000 \\
+  \end{aligned}
+\end{equation}
+
+## Simule 1000 observações considerando $|\phi|>1$, $\sigma^2=5$ e $y_0=\frac{\phi_0}{1-\phi_1}$. Apresente o gráfico da série, a função de autocorrelação e a função de autocorrelação parcial. Qual a principal diferença entre essa série e a série simulada na letra A?
+
+```{r d serie}
+# série AR(1)
+y_t = ar1(
+  t = 1000,
+  phi_1 = 1.2,
+  v = 5
+)
+
+head(y_t, 20)
+```
+
+Os gráficos:
+
+```{r d graficos}
+# série
+plot(
+  y_t, type = "l",
+  xlab = "t, h",
+  ylab = "Y"
+)
+
+# funções de autocorrelação
+par(mfrow = c(1, 2))
+acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
+pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
+```
+
+A série não é mais convergente, mas explosiva. Posso provar que isso irá acontecer para qualquer $|\phi|>1$ reescrevendo $y_t$ na forma iterativa:
+
+\begin{align}
+  y_t &= c+\phi_{t-1}+\epsilon_t \\
+  y_{t-1} &= c+\phi_{t-2}+\epsilon_{t-1} \\
+  y_{t-2} &= c+\phi_{t-3}+\epsilon_{t-2} \\
+  \vdots \nonumber
+\end{align}
+
+Substituindo (3) e (4) em (2), temos:
+
+\begin{equation}
+  \begin{aligned}
+    y_t &= c + \phi(c + \phi y_{t-2} + \epsilon_{t-1}) + \epsilon_t \\
+    &= c + \phi(c + \phi(c + \phi y_{t-3} + \epsilon_{t-2}) + \epsilon_{t-1}) + \epsilon_{t} \\
+    &= c + \phi c + \phi^2c + \phi^3y_{t-3} + \phi^2\epsilon_{t-2}) + \phi\epsilon_{t-1}) +     \epsilon_{t} \\
+    & \vdots \\
+    &= \sum_{i=1}^{k}c\phi^{i-1} + \phi^k y_{t-k} + \sum_{j=0}^{k}\phi^{j}\epsilon_{t-j}
+  \end{aligned}
+\end{equation}
+
+Com $k \to \infty$, temos que os 3 termos de $y_t$ são divergentes com $|\phi|>1$. O segundo termo se dá diretamente, enquanto o primeiro e terceiro termos são séries geométricas divergentes.
+
+\begin{equation}
+  \lim_{k \to +\infty} \phi^ky_{t-k} = +\infty
+\end{equation}
+
+\begin{equation}
+  \sum_{i=1}^{k}c\phi^{i-1} = \frac{c(1-\phi^k)}{1-\phi}
+\end{equation}
+
+Com $|\phi| > 1$,
+
+\begin{equation}
+  \lim_{k \to +\infty} \frac{c(1-\phi^k)}{1-\phi} = +\infty
+\end{equation}
+
+Somente no caso em que $|\phi| < 1$ é que a convergência é obtida em (7):
+
+\begin{equation}
+  \lim_{k \to +\infty} \frac{c(1-\phi^k)}{1-\phi} = \frac{c}{1-\phi}
+\end{equation}
+
+## Para o modelo estimado na letra A, escreva a equação de previsão e obtenha $E[y_{T+h|\Omega_T}]$ para $h=1, ..., 200$. Essa previsão converge para a média incondicional do processo? Apresente graficamente os valores previstos e a média incondicional.
+
+Primeiro a teoria. Para um processo AR(1) $y_t = c + \phi y_{t-1} + \epsilon_t$, a previsão para um horizonte $h$ se dará por:
+
+\begin{equation}
+  \begin{aligned}
+    \hat{y}_{T+1} &= E[c + \phi y_t + \epsilon_{T+1}] = c + \phi\mu \\
+    \hat{y}_{T+2} &= E[c + \phi \hat{y}_{T+1} + \epsilon_{T+2}] = c + \phi(c + \phi\mu) = c + \phi c + \phi^2\mu \\
+    \hat{y}_{T+3} &= E[c + \phi \hat{y}_{T+2} + \epsilon_{T+3}] = c + \phi(c + \phi c + \phi^2\mu) = c + \phi c + \phi^2\mu + \phi^3\mu \\
+    \vdots \\
+    \hat{y}_{T+h} &= E[c + \phi \hat{y}_{T+h-1} + \epsilon_{T+h}] = \sum_{i=1}^{h}c\phi^{i-1} + \phi^h\mu \\
+  \end{aligned}
+\end{equation}
+
+Acerca da convergência, tomamos o limite:
+
+\begin{equation}
+  \begin{aligned}
+    \lim_{h \to +\infty} \hat{y}_{T+h} &= \sum_{i=1}^{\infty}c\phi^{i-1} + \phi^\infty\mu \\
+    &= \begin{cases}
+      \frac{c}{1-\phi} + 0, & |\phi| < 1 \\
+      \infty, & |\phi| > 1
+      \end{cases}
+  \end{aligned}
+\end{equation}
+
+Portanto, sim, a previsão deve convergir para a média incondicional do processo neste caso.
+
+Agora, reescrevo a função `ar1` para adicionar a capacidade de previsão — e também a possibilidade de usar erro médio diferente de zero, para simular o mundo real e verificar como isso afeta a velocidade de convergência:
+
+```{r funcao previsao}
+# função geradora de processo AR(1) com previsão
+ar1 = function(
+    # quantidade de t (incluindo horizonte de previsão)
+    t,
+    # constante
+    phi_0 = 0,
+    # coeficiente autoregressivo
+    phi_1,
+    # variância
+    v,
+    # horizonte de previsão
+    h = NULL,
+    # média do erro
+    erro_medio = 0
+) {
+  
+  # y_t inicial
+  # se a série é estacionária E[y_t-1] = E[y_t])
+  y_t = phi_0 / (1 - phi_1)
+  
+  # gerando processo a partir de t_2 até t
+  for (i in 2:t) {
+    # ruído branco (ou apenas próximo o suficiente, para simular o mundo real)
+    erro = rnorm(1, mean = erro_medio, sd = sqrt(v))
+    # AR1
+    y_t[i] = phi_0 + phi_1 * y_t[i - 1] + erro
+  }
+
+  # previsão
+  if (!is.null(h)) {
+    # média da amostra
+    u = mean(y_t)
+    # loop representando a eq. 10
+    for (i in 1:h) {
+      y_t[t + i] = tail(cumsum(phi_0 * phi_1 ^ (1:i - 1)), 1) + u * (phi_1) ^ i
+    }
+  }
+  
+  # retorna processo
+  return(y_t)
+}
+```
+
+```{r e serie}
+# série AR(1)
+y_t = ar1(
+  t = 1000,
+  phi_1 = 0.5,
+  v = 5,
+  h = 200,
+  phi_0 = 500
+)
+
+# evidência da convergência em números
+y_t[995:1015]
+```
+
+```{r e graficos}
+# série
+plot(
+  y_t, type = "l",
+  xlab = "t, h",
+  ylab = "Y"
+)
+
+# funções de autocorrelação
+par(mfrow = c(1, 2))
+acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
+pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
+```
+
+## Para o modelo estimado na letra D, escreva a equação de previsão e obtenha, computacionalmente, $E[y_{T+h|\Omega_T}]$ para $h=1, ..., 200$. Compare o resultado com a letra D. Apresente os gráficos das previsões.
+
+```{r f serie}
+# série AR(1)
+y_t = ar1(
+  t = 1000,
+  phi_1 = 1.2,
+  v = 5,
+  h = 200,
+  phi_0 = 500
+)
+```
+
+```{r f graficos}
+# série
+plot(
+  y_t, type = "l",
+  xlab = "t, h",
+  ylab = "Y"
+)
+
+# funções de autocorrelação
+par(mfrow = c(1, 2))
+acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
+pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
+```
+
+O modelo já era divergente, como evidenciado na questão 6.D. Na previsão continuou divergindo, nunca chegando na convergência apresentada quando $|\phi| < 1$.
