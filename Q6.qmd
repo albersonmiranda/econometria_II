@@ -32,14 +32,16 @@ set.seed(1)
 
 # função geradora de processo AR(1)
 ar1 = function(
-    # quantidade de t (incluindo horizonte de previsão)
+    # quantidade de t
     t,
     # constante
     phi_0 = 0,
     # coeficiente autoregressivo
     phi_1,
-    # variância
-    v
+    # variância do erro
+    v,
+    # média do erro
+    erro_medio = 0
 ) {
   
   # y_t inicial
@@ -49,7 +51,7 @@ ar1 = function(
   # gerando processo a partir de t_2 até t
   for (i in 2:t) {
     # ruído branco
-    erro = rnorm(1, mean = 0, sd = sqrt(v))
+    erro = rnorm(1, mean = erro_medio, sd = sqrt(v))
     # AR1
     y_t[i] = phi_0 + phi_1 * y_t[i - 1] + erro
   }
@@ -76,7 +78,7 @@ Os gráficos:
 # série
 plot(
   y_t, type = "l",
-  xlab = "t, h",
+  xlab = "t",
   ylab = "Y"
 )
 
@@ -105,7 +107,7 @@ Os gráficos:
 # série
 plot(
   y_t, type = "l",
-  xlab = "t, h",
+  xlab = "t",
   ylab = "Y"
 )
 
@@ -145,7 +147,7 @@ Os gráficos:
 # série
 plot(
   y_t, type = "l",
-  xlab = "t, h",
+  xlab = "t",
   ylab = "Y"
 )
 
@@ -184,7 +186,7 @@ Os gráficos:
 # série
 plot(
   y_t, type = "l",
-  xlab = "t, h",
+  xlab = "t",
   ylab = "Y"
 )
 
@@ -270,18 +272,18 @@ Agora, reescrevo a função `ar1` para adicionar a capacidade de previsão — e
 ```{r funcao previsao}
 # função geradora de processo AR(1) com previsão
 ar1 = function(
-    # quantidade de t (incluindo horizonte de previsão)
+    # quantidade de t
     t,
     # constante
     phi_0 = 0,
     # coeficiente autoregressivo
     phi_1,
-    # variância
+    # variância do erro
     v,
-    # horizonte de previsão
-    h = NULL,
     # média do erro
-    erro_medio = 0
+    erro_medio = 0,
+    # horizonte de previsão
+    h = NULL
 ) {
   
   # y_t inicial
@@ -298,7 +300,7 @@ ar1 = function(
 
   # previsão
   if (!is.null(h)) {
-    # média da amostra
+    # média condicional
     u = mean(y_t)
     # loop representando a eq. 10
     for (i in 1:h) {
@@ -316,9 +318,10 @@ ar1 = function(
 y_t = ar1(
   t = 1000,
   phi_1 = 0.5,
-  v = 5,
+  v = 2000,
   h = 200,
-  phi_0 = 500
+  phi_0 = 500,
+  erro_medio = 10
 )
 
 # evidência da convergência em números
