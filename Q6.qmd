@@ -218,7 +218,7 @@ Substituindo (3) e (4) em (2), temos:
 Com $k \to \infty$, temos que os 3 termos de $y_t$ são divergentes com $|\phi|>1$. O segundo termo se dá diretamente, enquanto o primeiro e terceiro termos são séries geométricas divergentes.
 
 \begin{equation}
-  \lim_{k \to +\infty} \phi^ky_{t-k} = +\infty
+  \lim_{k \to +\infty} \phi^ky_{t-k} = \infty
 \end{equation}
 
 \begin{equation}
@@ -228,7 +228,7 @@ Com $k \to \infty$, temos que os 3 termos de $y_t$ são divergentes com $|\phi|>
 Com $|\phi| > 1$,
 
 \begin{equation}
-  \lim_{k \to +\infty} \frac{c(1-\phi^k)}{1-\phi} = +\infty
+  \lim_{k \to +\infty} \frac{c(1-\phi^k)}{1-\phi} = \infty
 \end{equation}
 
 Somente no caso em que $|\phi| < 1$ é que a convergência é obtida em (7):
