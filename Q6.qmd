@@ -41,12 +41,13 @@ ar1 = function(
     # variância do erro
     v,
     # média do erro
-    erro_medio = 0
+    erro_medio = 0,
+    # valor inicial (coloquei a média do processo como default)
+    y_0 = phi_0 / (1 - phi_1)
 ) {
   
   # y_t inicial
-  # se a série é estacionária E[y_t-1] = E[y_t])
-  y_t = phi_0 / (1 - phi_1)
+  y_t = y_0
   
   # gerando processo a partir de t_2 até t
   for (i in 2:t) {
@@ -133,9 +134,9 @@ mean(erro)
 # série AR(1)
 y_t = ar1(
   t = 1000,
-  phi_0 = 500,
   phi_1 = 0.5,
-  v = 5
+  v = 5,
+  y_0 = 500
 )
 
 head(y_t)
@@ -157,13 +158,12 @@ acf(y_t, main = "", xlab = "defasagem", ylab = "FAC")
 pacf(y_t, main = "", xlab = "defasagem", ylab = "FACP")
 ```
 
-A diferença agora é que com a constante diferente de zero, a série flutua em torno de sua nova média:
+A série flutua em torno da média incondicional, que não depende de $y_0$. Então, a série retorna para $0$:
 
 \begin{equation}
   \begin{aligned}
-    E[Y_t]&=\frac{c}{1-\phi_1} \\
-    &=\frac{500}{1-0.5} \\
-    &=1000 \\
+    E[Y_t]&=\frac{\phi_0}{1-\phi_1} \\
+    &=\frac{0}{1-0.5} = 0
   \end{aligned}
 \end{equation}
 
@@ -245,11 +245,11 @@ Primeiro a teoria. Para um processo AR(1) $y_t = c + \phi y_{t-1} + \epsilon_t$,
 
 \begin{equation}
   \begin{aligned}
-    \hat{y}_{T+1} &= E[c + \phi y_t + \epsilon_{T+1}] = c + \phi\mu \\
-    \hat{y}_{T+2} &= E[c + \phi \hat{y}_{T+1} + \epsilon_{T+2}] = c + \phi(c + \phi\mu) = c + \phi c + \phi^2\mu \\
-    \hat{y}_{T+3} &= E[c + \phi \hat{y}_{T+2} + \epsilon_{T+3}] = c + \phi(c + \phi c + \phi^2\mu) = c + \phi c + \phi^2\mu + \phi^3\mu \\
+    \hat{y}_{T+1} &= E[\phi_0 + \phi_1 y_t + \epsilon_{T+1}] = \phi_0 + \phi_1 y_t \\
+    \hat{y}_{T+2} &= E[\phi_0 + \phi_1 \hat{y}_{T+1} + \epsilon_{T+2}] = \phi_0 + \phi_1(\phi_0 + \phi y_t) = \phi_0 + \phi_0 \phi_1 + \phi_1^2 y_t \\
+    \hat{y}_{T+3} &= E[\phi_0 + \phi_1 \hat{y}_{T+2} + \epsilon_{T+3}] = \phi_0 + \phi_1(\phi_0 + \phi_0 \phi_1 + \phi_1^2 y_t) = \phi_0 + \phi_0 \phi_1 + \phi_0 \phi^2 y_t + \phi_1^3 y_t \\
     \vdots \\
-    \hat{y}_{T+h} &= E[c + \phi \hat{y}_{T+h-1} + \epsilon_{T+h}] = \sum_{i=1}^{h}c\phi^{i-1} + \phi^h\mu \\
+    \hat{y}_{T+h} &= E[\phi_0 + \phi_1 \hat{y}_{T+h-1} + \epsilon_{T+h}] = \phi_0\sum_{i=0}^{h-1}\phi_1^{i} + \phi_1^h y_t \\
   \end{aligned}
 \end{equation}
 
@@ -257,10 +257,10 @@ Acerca da convergência, tomamos o limite:
 
 \begin{equation}
   \begin{aligned}
-    \lim_{h \to +\infty} \hat{y}_{T+h} &= \sum_{i=1}^{\infty}c\phi^{i-1} + \phi^\infty\mu \\
+    \lim_{h \to +\infty} \hat{y}_{T+h} &= \phi_0 \sum_{i=0}^{\infty}\phi^{i} + \phi^\infty y_t \\
     &= \begin{cases}
-      \frac{c}{1-\phi} + 0, & |\phi| < 1 \\
-      \infty, & |\phi| > 1
+      \frac{\phi_0}{1-\phi_1} + 0, & |\phi_1| < 1 \\
+      \infty, & |\phi_1| > 1
       \end{cases}
   \end{aligned}
 \end{equation}
@@ -282,13 +282,14 @@ ar1 = function(
     v,
     # média do erro
     erro_medio = 0,
+    # valor inicial (coloquei a média do processo como default)
+    y_0 = phi_0 / (1 - phi_1),
     # horizonte de previsão
     h = NULL
 ) {
   
   # y_t inicial
-  # se a série é estacionária E[y_t-1] = E[y_t])
-  y_t = phi_0 / (1 - phi_1)
+  y_t = y_0
   
   # gerando processo a partir de t_2 até t
   for (i in 2:t) {
@@ -318,10 +319,8 @@ ar1 = function(
 y_t = ar1(
   t = 1000,
   phi_1 = 0.5,
-  v = 2000,
-  h = 200,
-  phi_0 = 500,
-  erro_medio = 10
+  v = 5,
+  h = 200
 )
 
 # evidência da convergência em números
@@ -350,8 +349,7 @@ y_t = ar1(
   t = 1000,
   phi_1 = 1.2,
   v = 5,
-  h = 200,
-  phi_0 = 500
+  h = 200
 )
 ```
 
