@@ -1,0 +1,121 @@
+---
+title: "Lista II: Q1"
+author: "Alberson Miranda"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    output-file: render/lista II.pdf
+number-sections: true
+mainfont: "Times New Roman"
+monofont: "Consolas"
+monofontoptions:
+  - Scale=0.8
+highlight-style: zenburn
+header-includes: 
+  - \renewcommand\thesubsection{\Alph{subsection}}
+---
+
+```{r configs, include = FALSE}
+
+# configurações
+knitr::opts_chunk$set(
+  fig.output = "70%"
+)
+
+# reproducibilidade
+set.seed(1)
+
+# pacotes
+pacman::p_load(
+    "ggplot2",
+    "tsibble",
+    "fable",
+    "feasts",
+    "fabletools",
+    "urca"
+)
+```
+
+# MODELAGEM BOX-JENKINS: SÉRIE I
+
+O primeiro passo é a importação e visualização da série. Como não há informação sobre o período, usarei diário e tentarei identificar a partir de um padrão sazonal, se houver.
+
+```{r data}
+
+# importando dados
+load("data/lista II.RData")
+data = data.frame(
+    value = conjunto1[, 1],
+    index = seq(
+        as.Date("2000-01-01"),
+        by = 1,
+        length.out = length(conjunto1[, 1])
+    )
+) |> tsibble(index = index)
+```
+
+A série é compacta, ou seja, de amplitude baixa, não requerindo transformação para estabilização de variância.
+
+```{r plot}
+
+# plot série
+autoplot(data, .vars = value)
+```
+
+O segundo passo é testar se a série é estacionária no primeiro momento. Não há evidências de raiz unitária tanto nos testes quanto nos gráficos de autocorrelação.
+
+```{r unit root}
+
+# KPSS test
+data |>
+    features(value, unitroot_kpss)
+
+# Phillips-Perron test
+data |>
+    features(value, unitroot_pp)
+
+# Augmented-Dickey-Fuller test
+data |>
+    (\(x) ur.df(x$value, selectlags = "AIC", type = "drift", lags = 12))() |>
+    summary()
+
+data |>
+    (\(x) ur.df(x$value, selectlags = "AIC", type = "trend", lags = 12))() |>
+    summary()
+
+data |>
+    (\(x) ur.df(x$value, selectlags = "AIC", type = "none", lags = 12))() |>
+    summary()
+```
+
+```{r autocorrelation}
+
+# ACF
+data |> ACF() |> autoplot()
+
+# ACF
+data |> PACF() |> autoplot()
+```
+
+```{r diferenciando}
+
+# diferenciando
+data |>
+    dplyr::mutate(diff_value = difference(value)) |>
+    autoplot(.vars = diff_value)
+```
+
+
+## MODELAGEM BOX-JENKINS: SÉRIE II
+
+A série não parece estável. Recomendável transformação para estabilização da variância.
+
+```{r box-cox transformation}
+
+lambda = data |>
+  features(value, features = guerrero) |>
+  (\(x) x[["lambda_guerrero"]])()
+
+data |>
+    autoplot(box_cox(value, lambda))
+```

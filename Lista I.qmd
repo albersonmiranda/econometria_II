@@ -2,7 +2,9 @@
 title: "Lista I: Q6"
 author: "Alberson Miranda"
 date: "`r Sys.Date()`"
-format: pdf
+format:
+  pdf:
+    output-file: render/lista I.pdf
 number-sections: true
 mainfont: "Times New Roman"
 monofont: "Consolas"
