@@ -54,7 +54,7 @@ data = data.frame(
 ) |> tsibble(index = index)
 ```
 
-A série é compacta, ou seja, de amplitude baixa, não requerindo transformação para estabilização de variância.
+A série é compacta, ou seja, de amplitude baixa, não requerindo transformação para redução de variância.
 
 ```{r plot}
 
@@ -62,7 +62,7 @@ A série é compacta, ou seja, de amplitude baixa, não requerindo transformaç�
 autoplot(data, .vars = value)
 ```
 
-O segundo passo é testar se a série é estacionária no primeiro momento. Não há evidências de raiz unitária tanto nos testes quanto nos gráficos de autocorrelação.
+O segundo passo é testar se a série é estacionária no primeiro momento. Não há evidências de raiz unitária tanto nos testes quanto nos gráficos de autocorrelação. Para os testes ADF, iniciei com a especificação com tendência. Não sendo significativo o coeficiente `tt`, passei para a especificação com *drift*, sendo tanto o intercepto quanto `z.lag.1` significativos, adoto esta como a correta especificação e, assim como nos testes de Phillips-Perron e KPSS, não há inidcativo de raiz unitária.
 
 ```{r unit root}
 
@@ -76,17 +76,15 @@ data |>
 
 # Augmented-Dickey-Fuller test
 data |>
-    (\(x) ur.df(x$value, selectlags = "AIC", type = "drift", lags = 12))() |>
-    summary()
-
-data |>
     (\(x) ur.df(x$value, selectlags = "AIC", type = "trend", lags = 12))() |>
     summary()
 
 data |>
-    (\(x) ur.df(x$value, selectlags = "AIC", type = "none", lags = 12))() |>
+    (\(x) ur.df(x$value, selectlags = "AIC", type = "drift", lags = 12))() |>
     summary()
 ```
+
+A seguir, pode-se perceber decaimento na ACF e um pic na PACF, sugerindo um processo AR(1).
 
 ```{r autocorrelation}
 
@@ -99,10 +97,7 @@ data |> PACF() |> autoplot()
 
 ```{r diferenciando}
 
-# diferenciando
-data |>
-    dplyr::mutate(diff_value = difference(value)) |>
-    autoplot(.vars = diff_value)
+
 ```
 
 
