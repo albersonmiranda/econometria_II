@@ -15,7 +15,7 @@ header-includes:
   - \renewcommand\thesubsection{\Alph{subsection}}
 ---
 
-```{r configs, include = FALSE}
+```{r configs}
 
 # configurações
 knitr::opts_chunk$set(
@@ -84,7 +84,7 @@ data |>
     summary()
 ```
 
-A seguir, pode-se perceber decaimento na ACF e um pic na PACF, sugerindo um processo AR(1).
+A seguir, pode-se perceber decaimento na ACF e um pico na PACF, sugerindo um processo AR(1).
 
 ```{r autocorrelation}
 
@@ -95,11 +95,36 @@ data |> ACF() |> autoplot()
 data |> PACF() |> autoplot()
 ```
 
-```{r diferenciando}
+Além do AR(1), também realizei uma *grid search*, que consiste na estimação de todas as combinações possíveis de modelos ARIMA dada uma restrição de coeficientes. Neste caso, como a análise do correlograma sugere um AR(1), optei por uma restrição parcimoniosa, com no máximo 3 coeficientes (AR ou MA) e sem testar modelos integrados, uma vez que foi constatada a estacionaridade. Dentre os modelos estimados, o de menor critério de informação foi o AR(1), no mesmo sentido da análise visual do correlograma.
 
+```{r estimacao}
 
+data_fit = data |>
+  model(
+    ar1 = ARIMA(
+      value ~ 1 + pdq(1, 0, 0)
+    ),
+    search = ARIMA(
+        value,
+        stepwise = FALSE,
+        trace = TRUE,
+        order_constraint = p + q + P + Q <= 3 & (constant + d + D <= 1))
+)
 ```
 
+Antes de realizar predições, verificamos se os resíduos são ruído branco, o que indica que o modelo foi bem especificado.
+
+```{r white noise}
+
+# teste de Ljung-Box
+data_fit |>
+  dplyr::select(ar1) |>
+  gg_tsresiduals()
+
+augment(data_fit) |>
+  dplyr::filter(.model == "ar1") |>
+  features(.innov, ljung_box, lag = 12, dof = 2)
+```
 
 ## MODELAGEM BOX-JENKINS: SÉRIE II
 
