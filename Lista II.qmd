@@ -62,7 +62,7 @@ A série é compacta, ou seja, de amplitude baixa, não requerindo transformaç�
 autoplot(data, .vars = value)
 ```
 
-O segundo passo é testar se a série é estacionária no primeiro momento. Não há evidências de raiz unitária tanto nos testes quanto nos gráficos de autocorrelação. Para os testes ADF, iniciei com a especificação com tendência. Não sendo significativo o coeficiente `tt`, passei para a especificação com *drift*, sendo tanto o intercepto quanto `z.lag.1` significativos, adoto esta como a correta especificação e, assim como nos testes de Phillips-Perron e KPSS, não há inidcativo de raiz unitária.
+O segundo passo é testar se a série é estacionária no primeiro momento. Não há evidências de raiz unitária tanto nos testes quanto nos gráficos de autocorrelação. Para os testes ADF, iniciei com a especificação com tendência. Não sendo significativo o coeficiente `tt`, passei para a especificação com *drift*, sendo tanto o intercepto quanto `z.lag.1` significativos, adoto esta como a correta especificação e, assim como nos testes de Phillips-Perron e KPSS, não há indicativo de raiz unitária.
 
 ```{r unit root}
 
@@ -112,7 +112,7 @@ data_fit = data |>
 )
 ```
 
-Antes de realizar predições, verificamos se os resíduos são ruído branco, o que indica que o modelo foi bem especificado.
+Na etapa de diagnóstico, verificamos se os resíduos são ruído branco e aproximadamente normalmente distribuídos, o que indica que o modelo foi bem especificado. No teste de Ljung-Box, não há evidência suficiente para rejeitar a hipótese nula de autocorrelação dos resíduos. No mesmo sentido, o histograma também aponta para o diagnóstico positivo do modelo.
 
 ```{r white noise}
 
@@ -126,16 +126,225 @@ augment(data_fit) |>
   features(.innov, ljung_box, lag = 12, dof = 2)
 ```
 
+Conclui-se pela seleção do AR(1), de seguinte equação:
+
+$$
+y_t = \phi_0 + \phi_1 y_{t-1}
+$$
+
 ## MODELAGEM BOX-JENKINS: SÉRIE II
 
-A série não parece estável. Recomendável transformação para estabilização da variância.
+Visualizando a série, nota-se imediatamente que não é estacionária por conta da tendência.
 
-```{r box-cox transformation}
+```{r data2}
 
-lambda = data |>
-  features(value, features = guerrero) |>
-  (\(x) x[["lambda_guerrero"]])()
+# importando dados
+data = data.frame(
+    value = conjunto1[, 6],
+    index = yearmonth(
+      seq(
+        as.Date("2000-01-01"),
+        by = "month",
+        length.out = length(conjunto1[, 1])
+    )
+  )
+) |> tsibble(index = index)
+```
+
+```{r plot2}
+
+# plot série
+autoplot(data, .vars = value)
+```
+
+A estratégia para correção é a diferenciação. Com o teste KPSS, a primeira sugestão é de que a série é estacionária em primeiras diferenças, sem raiz unitária sazonal.
+
+```{r diferenciação}
+
+# KPSS test e sazonal
+data |>
+    features(value, unitroot_ndiffs)
 
 data |>
-    autoplot(box_cox(value, lambda))
+    features(value, unitroot_nsdiffs)
+
+# diferenciando
+data$diff_value = difference(data$value)
+
+data |>
+  autoplot(.vars = diff_value)
 ```
+
+Na série diferenciada, não há evidências de raiz unitária tanto nos testes quanto nos gráficos de autocorrelação. Para os testes ADF, iniciei com a especificação com tendência. Não sendo significativo o coeficiente `tt`, passei para a especificação com *drift*, sendo tanto o intercepto quanto `z.lag.1` significativos, adoto esta como a correta especificação e, assim como nos testes de Phillips-Perron e KPSS, não há indicativo de raiz unitária.
+
+```{r unit root2}
+
+# KPSS test
+data |>
+  features(diff_value, unitroot_kpss)
+
+# Phillips-Perron test
+data |>
+  features(diff_value, unitroot_pp)
+
+# Augmented-Dickey-Fuller test
+data |>
+  na.omit() |>
+  (\(x) ur.df(x$diff_value, selectlags = "AIC", type = "trend", lags = 12))() |>
+  summary()
+
+data |>
+  na.omit() |>
+  (\(x) ur.df(x$diff_value, selectlags = "AIC", type = "drift", lags = 12))() |>
+  summary()
+```
+
+A seguir, pode-se perceber decaimento nas lags sazonais na ACF, indicando a presença de componente sazonal. Além disso, a análise dos correlogramas sugerem modelos de ordem inferior ou igual a 3 — três picos significativos na ACF e dois na PACF. Porém, a identificação de modelos ARMA é inconclusiva a partir da análise do correlograma exclusivamente.
+
+```{r autocorrelation2}
+
+# ACF
+data |> ACF(diff_value, lag_max = 60) |> autoplot()
+
+# ACF
+data |> PACF(diff_value, lag_max = 60) |> autoplot()
+```
+
+Para avaliar candidatos a modelos, realizei uma *grid search* impondo as seguintes restrições:
+
+1. $d = 1$, $D = 0$ e $d + D + \text{constante} <= 2$
+2. $p + q + P + Q <= 5$
+
+```{r candidatos}
+data |>
+  model(
+    search = ARIMA(
+      value,
+      ic = "aic",
+      stepwise = FALSE,
+      trace = TRUE,
+      order_constraint = (p + q + P + Q <= 5) &
+        d == 1 &
+        D == 0 &
+        constant == 1
+  )
+)
+```
+
+A estratégia adotada foi selecionar os modelos com $\Delta \text{AIC} < 2$ em relação ao modelo de menor AIC, além de sua combinação por média simples. São eles:
+
+```{r candidatos selecionados}
+tibble::tribble(
+  ~Modelo, ~AIC, ~delta_AIC,
+  "ARIMA(0,1,1)(0,0,2)[12]+c", 1291.86, 0,  
+  "ARIMA(0,1,1)(2,0,0)[12]+c", 1292.68, 0.82,
+  "ARIMA(0,1,1)(1,0,0)[12]+c", 1292.73, 0.87,
+  "ARIMA(1,1,2)(1,0,0)[12]+c", 1293.05, 1.19,
+  "ARIMA(0,1,1)(2,0,1)[12]+c", 1293.36, 1.51,
+  "ARIMA(0,1,2)(0,0,2)[12]+c", 1293.48, 1.62
+)
+
+data_fit = data |>
+  model(
+    arima011002 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(0, 0, 2)
+    ),
+    arima011200 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(2, 0, 0)
+    ),
+    arima011100 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(1, 0, 0)
+    ),
+    arima112100 = ARIMA(
+      value ~ 1 + pdq(1, 1, 2) + PDQ(1, 0, 0)
+    ),
+    arima011201 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(2, 0, 0)
+    ),
+    arima012002 = ARIMA(
+      value ~ 1 + pdq(0, 1, 2) + PDQ(0, 0, 2)
+    )
+  ) |>
+  dplyr::mutate(combinacao = (
+    arima011002 + arima011200 + arima011100 + arima112100 + arima011201 + arima012002
+    ) / 6)
+```
+
+Na etapa de diagnóstico, todos modelos são considerados aptos para previsão, ao não apresentarem evidências para rejeitar as hipóteses nulas dos testes de Ljung-Box de ausência de autocorrelação serial e ARCH-LM de ausência de hetoscedasticidade condicional.
+
+```{r white noise2}
+
+modelos = names(data_fit)
+names(modelos) = names(data_fit)
+
+# teste de Ljung-Box
+lapply(modelos, function(x) {
+
+  augment(data_fit) |>
+  dplyr::filter(.model == x) |>
+  features(.innov, ljung_box, lag = 24, dof = 5)
+})
+
+# teste ARCH-LM
+lapply(modelos, function(x) {
+
+  augment(data_fit) |>
+  dplyr::filter(.model == x) |>
+  features(.innov, stat_arch_lm, lags = 24)
+})
+```
+
+Para testar a performance dos modelos, a série será particionada em 80%-20%, com os modelos treinados na primeira parte e treinada na última. Escolhendo, por fim, o modelo pelo critério menor erro absoluto percentual médio, a seleção ficaria com o SARIMA(0,1,1)(0,0,2), que também foi o de menor AIC.
+
+```{r avaliacao}
+#| fig-cap: "avaliação de performance"
+
+# separando amostra treino
+data_treino = subset(data, index <= yearmonth("2013 apr"))
+
+# ajustando o treino
+data_treino_fit = data_treino |>
+  model(
+    arima011002 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(0, 0, 2)
+    ),
+    arima011200 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(2, 0, 0)
+    ),
+    arima011100 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(1, 0, 0)
+    ),
+    arima112100 = ARIMA(
+      value ~ 1 + pdq(1, 1, 2) + PDQ(1, 0, 0)
+    ),
+    arima011201 = ARIMA(
+      value ~ 1 + pdq(0, 1, 1) + PDQ(2, 0, 0)
+    ),
+    arima012002 = ARIMA(
+      value ~ 1 + pdq(0, 1, 2) + PDQ(0, 0, 2)
+    )
+  ) |>
+  dplyr::mutate(combinacao = (
+    arima011002 + arima011200 + arima011100 + arima112100 + arima011201 + arima012002
+    ) / 6)
+
+# realizando previsões para fora do treino
+data_treino_fc = data_treino_fit |>
+  fabletools::forecast(h = 42)
+
+# plotando
+data_treino_fc |>
+  autoplot(
+    data |> filter_index("2012-01" ~ .),
+    level = NULL
+  )
+
+# calculando acurácia
+accuracy(data_treino_fc, data)
+```
+
+E sua equação:
+
+$$
+(1 - L)y_t = (1 - \Theta_1L^{12} - \Theta_2L^{24})(1 - \theta_1L)\epsilon_t
+$$
