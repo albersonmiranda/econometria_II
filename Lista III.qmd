@@ -1,0 +1,315 @@
+---
+title: "Lista III"
+author: "Alberson Miranda"
+date: "`r Sys.Date()`"
+format:
+  pdf:
+    output-file: render/lista II.pdf
+number-sections: true
+mainfont: "Times New Roman"
+monofont: "Consolas"
+monofontoptions:
+  - Scale=0.8
+highlight-style: zenburn
+header-includes: 
+  - \renewcommand\thesubsection{\Alph{subsection}}
+---
+
+```{r configs}
+
+# configurações
+knitr::opts_chunk$set(
+  out.width = "100%"
+)
+
+# reproducibilidade
+set.seed(1)
+
+# pacotes
+pacman::p_load(
+    "ggplot2"
+)
+# dados
+load("data/lista_III.RData")
+```
+
+# Considere o banco de dados dadosSVAR. Este banco contém 3 séries temporais. Com base nessas informações faça o que se pede:
+
+## Estime um VAR(p). Analise os resíduos e selecione a melhor ordem para o modelo. Escreva a equação do modelo indicando os elementos das matrizes.
+
+```{r data wrangling}
+
+# coercing to tsibble
+data = data.frame(
+    inflacao = inf,
+    juros = juros,
+    produto = y,
+    index = tsibble::yearquarter(
+        seq(
+            as.Date("2000-01-01"),
+            by = "quarter",
+            length.out = length(y)
+        )
+    )
+) |> tsibble::tsibble(index = index)
+
+# plot série
+data |>
+tidyr::pivot_longer(
+    -index,
+    names_to = "séries",
+    values_to = "valor") |>
+fabletools::autoplot() +
+facet_grid(vars(séries), scales = "free")
+```
+
+Para seleção da ordem do VAR(p), usarei os critérios de informação de Akaike corrigico (AICc) e o de Schwarz (BIC). Pelo princípio da parcimônia, o modelo escolhido será o de menor ordem dentre os que apresentarem ruído branco. O AICc apontou para um VAR(4), enquanto o BIC para um VAR(5).
+
+```{r ajuste}
+
+# ajuste
+fit = data |>
+  fabletools::model(
+    aicc = fable::VAR(vars(inflacao, juros, produto) ~ 1 + AR(p = 0:6), ic = "aicc"),
+    bic = fable::VAR(vars(inflacao, juros, produto) ~ 1 + AR(p = 0:6), ic = "bic")
+  )
+
+# ordem
+fit
+
+# critérios de informação
+fabletools::glance(fit)
+```
+
+Analisando os resíduos, a ACF do VAR(4) ainda demostrou autocorrelação significativa, enquanto a do VAR(5) se mostrou ruído branco. Assim, selecionamos o VAR(5).
+
+```{r diagnostico}
+
+# ACF dos resíduos
+fit |>
+  fabletools::augment() |>
+  feasts::ACF(.innov) |>
+  autoplot()
+
+# Portmanteau test
+fabletools::augment(fit) |>
+  subset(.model == "bic") |>
+  fabletools::features(.innov, feasts::ljung_box, lag = 5)
+
+# coeficientes
+fit |>
+    subset(select = bic) |>
+    fabletools::report()
+
+```
+
+A equação do modelo é:
+
+$$
+\begin{bmatrix}
+    Y_{A, t} \\
+    Y_{B, t} \\
+    Y_{C, t} \\
+\end{bmatrix}
+=
+\begin{bmatrix}
+    \phi_{0A} \\
+    \phi_{0B} \\
+    \phi_{0C} \\
+\end{bmatrix}
++
+\begin{bmatrix}
+    \phi_{11} & \phi_{12} & \phi_{13} \\
+    \phi_{21} & \phi_{22} & \phi_{23} \\
+    \phi_{31} & \phi_{32} & \phi_{33} \\
+\end{bmatrix}
+\begin{bmatrix}
+    Y_{A, t-1} \\
+    Y_{B, t-1} \\
+    Y_{C, t-1} \\
+\end{bmatrix}
++
+\begin{bmatrix}
+    \phi_{14} & \phi_{15} & \phi_{16} \\
+    \phi_{24} & \phi_{25} & \phi_{26} \\
+    \phi_{34} & \phi_{35} & \phi_{36} \\
+\end{bmatrix}
+\begin{bmatrix}
+    Y_{A, t-2} \\
+    Y_{B, t-2} \\
+    Y_{C, t-2} \\
+\end{bmatrix}
++
+\hdots
++
+\begin{bmatrix}
+    \epsilon_{A, t} \\
+    \epsilon_{B, t} \\
+    \epsilon_{C, t} \\
+\end{bmatrix}
+$$
+
+$$
+\begin{split}
+    \begin{bmatrix}
+        Y_{i, t} \\
+        Y_{j, t} \\
+        Y_{p, t} \\
+    \end{bmatrix}
+    = \\
+    &\begin{bmatrix}
+        0.6477 \\
+        0.0764 \\
+        -0.0047 \\
+    \end{bmatrix}
+    + \\
+    &\begin{bmatrix}
+        1.4346 & -0.4282 & 6.2583 \\
+        0.1373 & 1.4102 & -1.3161 \\
+        0.0053 & -0.0014 & 0.5377 \\
+    \end{bmatrix}
+    \begin{bmatrix}
+        Y_{i, t-1} \\
+        Y_{j, t-1} \\
+        Y_{p, t-1} \\
+    \end{bmatrix}
+    + \\
+    &\begin{bmatrix}
+        -0.7060 & 0.4701 & 6.9992 \\
+        -0.1466 & -0.5880 & -1.3960 \\
+        -0.0066 & 0.0053 & -0.1374 \\
+    \end{bmatrix}
+    \begin{bmatrix}
+        Y_{i, t-2} \\
+        Y_{j, t-2} \\
+        Y_{p, t-2} \\
+    \end{bmatrix}
+    + \\
+    &\vdots
+    + \\
+    &\begin{bmatrix}
+        0.5813 & 0.0644 & -0.0011 \\
+        0.0644 & 0.0656 & -0.0003 \\
+        -0.0011 & -0.0003 & 0.0001 \\
+    \end{bmatrix}
+\end{split}
+$$
+
+## Faça o teste de causalidade de Granger para todas as variáveis.
+
+1. Juros x Inflação
+
+A 5% de significância, não há evidências para rejeição da hipótese nula de que a inflação não Granger-causa os juros (e vice-versa).
+```{r causalidade 1}
+
+# juros x inflação
+lmtest::grangertest(juros ~ inflacao, order = 5, data = data)
+lmtest::grangertest(inflacao ~ juros, order = 5, data = data)
+```
+
+2. Inflação x Produto
+
+A 5% de significância, não há evidências para rejeição da hipótese nula de que o produto não Granger-causa a inflação (e vice-versa).
+```{r causalidade 2}
+
+# produto x inflação
+lmtest::grangertest(inflacao ~ produto, order = 5, data = data)
+lmtest::grangertest(produto ~ inflacao, order = 5, data = data)
+```
+
+3. Produto x Juros
+
+A 5% de significância, não há evidências para rejeição da hipótese nula de que o produto não Granger-causa os juros (e vice-versa).
+```{r causalidade 3}
+
+# produto x juros
+lmtest::grangertest(juros ~ produto, order = 5, data = data)
+lmtest::grangertest(produto ~ juros, order = 5, data = data)
+```
+
+## Estime um SVAR considerando o modelo da letra A e as seguintes restrições para as relações contemporâneas: (i) y afeta inf e juros; (ii) inf afeta apenas juros porém não impacta y; (iii) juros não impacta y ou inf.
+
+```{r data wrangling para svar}
+
+# wrangling
+data = cbind(inf, juros, y)
+
+# restrições
+restricoes = diag(3)
+restricoes[3, 1] = NA
+restricoes[1, 2] = NA
+restricoes[3, 2] = NA
+
+# ajuste
+fit = vars::VAR(data, p = 5)
+fit_s = vars::SVAR(fit, Amat = restricoes, estmethod = "direct")
+
+# coeficientes
+summary(fit_s)
+```
+
+E os demais coeficientes?
+
+$$
+\begin{split}
+    \begin{bmatrix}
+        1 & -0.982810 & 0 \\
+        0 & 1 & 0 \\
+        0.001883 & 0.001882 & 1 \\
+    \end{bmatrix}
+    \begin{bmatrix}
+        Y_{i, t} \\
+        Y_{j, t} \\
+        Y_{p, t} \\
+    \end{bmatrix}
+\end{split}
+$$
+
+## Obtenha e analise a função impulso resposta e a decomposição da variância do erro de previsão. Você deve utilizar o VAR(p) ou o SVAR para essa análise? Justifique sua resposta.
+
+Deve-se usar o VAR estrutural para que os parâmetros estruturais sejam identificáveis. Do contrário, o problema da endogeneidade tornaria impossível atribuir a resposta a uma variável.
+
+```{r funcao impulso-resposta}
+
+par(mai = c(0,0,0,0))
+# função impulso-resposta: produto
+plot(
+    vars::irf(
+        fit_s,
+        impulse = "y",
+        response = c("inf", "juros"),
+        n.ahead = 10,
+        ortho = FALSE,
+        cumulative = FALSE
+    )
+)
+
+# função impulso-resposta: inflação
+plot(
+    vars::irf(
+        fit_s,
+        impulse = "inf",
+        response = c("y", "juros"),
+        n.ahead = 10,
+        ortho = FALSE,
+        cumulative = FALSE
+    )
+)
+
+# função impulso-resposta: juros
+plot(
+    vars::irf(
+        fit_s,
+        impulse = "juros",
+        response = c("y", "inf"),
+        n.ahead = 10,
+        ortho = FALSE,
+        cumulative = FALSE
+    )
+)
+
+# decomposição da variância
+plot(
+    vars::fevd(fit_s, n.ahead = 10)
+)
+```
