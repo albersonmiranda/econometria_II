@@ -235,20 +235,20 @@ lmtest::grangertest(produto ~ juros, order = 5, data = data)
 data = cbind(inf, juros, y)
 
 # restrições
-restricoes = diag(3)
-restricoes[3, 1] = NA
-restricoes[1, 2] = NA
-restricoes[3, 2] = NA
+mat_A = diag(3)
+mat_A[3, 1] = NA
+mat_A[1, 2] = NA
+mat_A[3, 2] = NA
 
 # ajuste
 fit = vars::VAR(data, p = 5)
-fit_s = vars::SVAR(fit, Amat = restricoes, estmethod = "direct")
+fit_s = vars::SVAR(fit, Amat = mat_A, estmethod = "direct")
 
 # coeficientes
 summary(fit_s)
 ```
 
-E os demais coeficientes?
+## Escreva, considerando o modelo estimado na letra c, a equação do SVAR indicando os elementos de todas as matrizes.
 
 $$
 \begin{split}
@@ -264,6 +264,8 @@ $$
     \end{bmatrix}
 \end{split}
 $$
+
+E os demais coeficientes?
 
 ## Obtenha e analise a função impulso resposta e a decomposição da variância do erro de previsão. Você deve utilizar o VAR(p) ou o SVAR para essa análise? Justifique sua resposta.
 
@@ -312,4 +314,13 @@ plot(
 plot(
     vars::fevd(fit_s, n.ahead = 10)
 )
+```
+
+# O arquivo questão_2 contém dados mensais sobre os índices de preços do consumidor no Japão, Canadá, Suíça e EUA. Além disso, conta com as taxas de câmbio bilaterais com o Estados Unidos. As variáveis são nomeadas, por exemplo, como JAPANCPI = índice de preços do Japão e JAPANEX = taxa de câmbio Japão/EUA. Para essa questão considere os dados até 12/2012
+
+## Obtenha o logaritmo das séries. Avalie se possuem raiz unitária.
+
+
+```{r}
+data = readxl::read_excel("data/dados.xlsx")
 ```
