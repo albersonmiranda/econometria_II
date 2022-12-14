@@ -29,6 +29,10 @@ set.seed(1)
 pacman::p_load(
     "ggplot2"
 )
+
+# tema
+tema = theme(text = element_text(size = 8))
+
 # dados
 load("data/lista_III.RData")
 ```
@@ -265,7 +269,7 @@ $$
 \end{split}
 $$
 
-E os demais coeficientes?
+E os demais coeficientes? Não entendi. É pra inverter a matriz e multiplicar pelos coeficientes do modelo irrestrito? Não está claro como o resultado da função se encaixa com a teoria estudada.
 
 ## Obtenha e analise a função impulso resposta e a decomposição da variância do erro de previsão. Você deve utilizar o VAR(p) ou o SVAR para essa análise? Justifique sua resposta.
 
@@ -320,7 +324,116 @@ plot(
 
 ## Obtenha o logaritmo das séries. Avalie se possuem raiz unitária.
 
+```{r}
+
+# carregando funcções
+library(dplyr, include.only = c("mutate", "across"))
+library(tidyselect, include.only = "where")
+library(urca)
+
+# importando dados
+data = readxl::read_excel("data/dados.xlsx")
+
+# convertendo data
+data = subset(data, ENTRY <= as.Date("2012-12-01")) |>
+    mutate(ENTRY = tsibble::yearmonth(ENTRY)) |>
+    mutate(across(where(is.character), as.numeric))
+
+# coercing to tsibble
+data = tsibble::tsibble(data, index = ENTRY)
+
+# séries em logs
+data_log = data |>
+    mutate(across(where(is.numeric), log))
+```
 
 ```{r}
-data = readxl::read_excel("data/dados.xlsx")
+# plot série
+data |>
+tidyr::pivot_longer(
+    -ENTRY,
+    names_to = "séries",
+    values_to = "valor") |>
+fabletools::autoplot() +
+facet_grid(vars(séries), scales = "free") +
+labs(
+    x = "",
+    title = "SÉRIES EM NÍVEL"
+) + tema
+
+# plot série em log
+data_log |>
+    tidyr::pivot_longer(
+        -ENTRY,
+        names_to = "séries",
+        values_to = "valor") |>
+    fabletools::autoplot() +
+    facet_grid(vars(séries), scales = "free") +
+labs(
+    x = "",
+    title = "SÉRIES EM LOG"
+) + tema
+```
+
+A seguir, os testes de raíz unitária.
+
+1. JAPANEX: o modelo com tendência se mostrou bem especificado e $\hat{\tau} \nless \tau$, de forma que não há evidências para rejeitar a hipótese nula de raíz unitária.
+2. JAPANCPI: a especificação com tendência foi não significativa para a variável de tendência determinística. Passando para a especificação com *drift*, o modelo é bem especificado. $\hat{\tau} < \tau$ a 1% de significância, então pode-se rejeitar a hipótese nula e a série é estacionária.
+3. USCPI: a especificação com tendência foi não significativa para a variável de tendência determinística. Passando para a especificação com *drift*, o modelo é bem especificado. $\hat{\tau} < \tau$ a 5% de significância, então pode-se rejeitar a hipótese nula e a série é estacionária.
+
+```{r raiz unitaria}
+
+# Augmented-Dickey-Fuller test JAPANEX
+data_log |>
+    (\(x) ur.df(x$JAPANEX, selectlags = "AIC", type = "trend", lags = 12))() |>
+    summary()
+
+# Augmented-Dickey-Fuller test JAPANCPI
+data_log |>
+    (\(x) ur.df(x$JAPANCPI, selectlags = "AIC", type = "trend", lags = 12))() |>
+    summary()
+
+data_log |>
+    (\(x) ur.df(x$JAPANCPI, selectlags = "AIC", type = "drift", lags = 12))() |>
+    summary()
+
+# Augmented-Dickey-Fuller test USCPI
+data_log |>
+    (\(x) ur.df(x$USCPI, selectlags = "AIC", type = "trend", lags = 12))() |>
+    summary()
+
+data_log |>
+    (\(x) ur.df(x$USCPI, selectlags = "AIC", type = "drift", lags = 12))() |>
+    summary()
+```
+
+## Estime a relação de longo prazo entre log(japanex) em função de log(japancpi) e log(uscpi). Com base na metodologia de Engle-Granger, teste para cointegração.
+
+Não podem ser cointegradas pois $log(JAPANCPI)$ e $log(USCPI)$ são estacionárias. Se não o fossem, o procedimento seria realizar a regressão e verificar se os resíduos são estacionários.
+
+Neste caso, a especificação correta para o teste ADF seria sem tendência e sem drift. Se acordo com o resultado, rejeitaria a hipótese nula e os resíduos seriam estacionários. Entretanto, a ACF é de uma série com raíz unitária, vide decaimento lento. Verificar.
+
+```{r}
+# modelo
+modelo = lm(log(JAPANEX) ~ log(JAPANCPI) + log(USCPI), data = data)
+summary(modelo)
+
+# plots dos resíduos
+plot.ts(modelo$residuals)
+acf(modelo$residuals)
+
+# teste de raíz unitária
+summary(ur.df(modelo$residuals, selectlags = "AIC", type = "trend", lags = 12))
+summary(ur.df(modelo$residuals, selectlags = "AIC", type = "drift", lags = 12))
+summary(ur.df(modelo$residuals, selectlags = "AIC", type = "none", lags = 12))
+```
+
+## Construa, caso necessário, o modelo de correção de erros para 𝛥log(japanex).
+
+Como o sinal do vetor de erro é positivo e não significante, não há cointegração.
+
+```{r}
+vecm = lm(diff(log(JAPANEX))[-1] ~ modelo$residuals[-1:-2] + log(JAPANCPI[-1:-2]) + log(USCPI[-1:-2]) + diff(log(JAPANEX))[-(length(data$JAPANEX) - 1)], data = data)
+
+summary(vecm)
 ```
